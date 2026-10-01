@@ -1,5 +1,5 @@
 -- 0001_schema.sql — tabelas do app Estacionamento.
--- Rode no SQL Editor do Supabase, na ordem: 0001, 0002, 0003.
+-- Rode no SQL Editor do Supabase, na ordem: 0001, 0002, 0003, 0004.
 -- Nenhum dado pessoal aqui: membros e configurações são cadastrados à parte (README).
 
 -- Membros autorizados (exatamente duas pessoas). O id é o mesmo de auth.users.

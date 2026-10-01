@@ -50,7 +50,7 @@ function HistoryItem({ bill, today, payerName }: { bill: Bill; today: string; pa
   const label = monthYearLabel(bill.month)
   return (
     <li className="card stack-sm">
-      <Link to={`/boleto?mes=${bill.month}`} className="history-link" aria-label={`Editar boleto de ${label}`}>
+      <Link to={`/boleto?mes=${bill.month}`} className="history-link">
         <div className="history-row">
           <span className="history-month">{label}</span>
           <span className="history-amount">{formatBRL(bill.amount)}</span>

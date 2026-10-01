@@ -100,7 +100,7 @@ input, select {
   font-size: 16px; /* evita zoom automático no iOS */
 }
 
-input:focus-visible, select:focus-visible, button:focus-visible {
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -137,6 +137,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .header-actions button { min-height: 36px; padding: 4px 12px; }
+.header-actions a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; }
 
 a { color: var(--accent-text); }
 
@@ -171,7 +172,7 @@ a { color: var(--accent-text); }
   justify-content: center;
   gap: 2px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-2); /* --text-muted dava só 3,6:1 no tema claro; --text-2 dá 7,9:1 */
   text-decoration: none;
 }
 .nav-item.active { color: var(--accent-text); font-weight: 500; }

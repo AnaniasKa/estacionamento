@@ -2,9 +2,9 @@
 -- Não altera nada: os testes de escrita rodam dentro de blocos que terminam sem gravar.
 --
 -- ORDEM DE TESTE:
---   1) Rode as migrations 0001, 0002 e 0003, nessa ordem.
+--   1) Rode as migrations 0001, 0002, 0003 e 0004, nessa ordem.
 --   2) Crie os dois usuários em Authentication > Users e insira members e settings
---      (SQL de cadastro no README).
+--      (modelo em supabase/seed.example.sql; veja o README).
 --   3) Lance um boleto de teste (pelo app, ou por INSERT como postgres).
 --   4) Só então rode os blocos (A) e (B). Com tabelas vazias, "0 linhas" não prova nada:
 --      o bloco (0) mostra quantas linhas existem de verdade e precisam ser > 0.
