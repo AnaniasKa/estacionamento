@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import BarcodeBlock from '../components/BarcodeBlock'
+import ShareBlock from '../components/ShareBlock'
+import type { Person } from '../lib/types'
 import { ErrorCard, LoadingCard } from '../components/States'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useToday } from '../hooks/useToday'
@@ -125,7 +127,15 @@ function Form({
   }
 
   if (saved) {
-    return <Confirmation bill={saved} payerName={nameOf(saved.payer_id)} editing={editing} />
+    return (
+      <Confirmation
+        bill={saved}
+        payerName={nameOf(saved.payer_id)}
+        recipient={data.people.find((p) => p.id === saved.payer_id)}
+        editing={editing}
+        onShared={(_id, openedAt) => setSaved({ ...saved, whatsapp_opened_at: openedAt })}
+      />
+    )
   }
 
   return (
@@ -247,7 +257,19 @@ function saveErrorMessage(err: unknown): string {
 }
 
 /** Tela de confirmação depois de lançar ou editar. */
-function Confirmation({ bill, payerName, editing }: { bill: Bill; payerName: string; editing: boolean }) {
+function Confirmation({
+  bill,
+  payerName,
+  recipient,
+  editing,
+  onShared,
+}: {
+  bill: Bill
+  payerName: string
+  recipient: Person | undefined
+  editing: boolean
+  onShared: (billId: string, openedAt: string) => void
+}) {
   return (
     <>
       <section className="highlight" role="status">
@@ -271,8 +293,10 @@ function Confirmation({ bill, payerName, editing }: { bill: Bill; payerName: str
         <BarcodeBlock barcode={bill.barcode} attachmentPath={bill.attachment_path} />
       )}
 
-      {/* Passo 6: o botão "Enviar no WhatsApp" entra aqui. */}
-      <div className="share-slot" />
+      {/* Compartilhar no WhatsApp: só aparece para quem não é o pagador do boleto. */}
+      <div className="share-slot">
+        <ShareBlock bill={bill} recipient={recipient} onShared={onShared} />
+      </div>
 
       <Link to="/" className="btn btn-primary">
         Voltar ao início

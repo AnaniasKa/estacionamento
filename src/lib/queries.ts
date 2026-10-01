@@ -50,6 +50,18 @@ export async function loadHistory(): Promise<HistoryData> {
   return { people: (people.data ?? []) as Person[], bills: (bills.data ?? []).map(toBill) }
 }
 
+/** Registra quando o compartilhamento foi aberto (não prova que a mensagem foi enviada). */
+export async function markWhatsappOpened(billId: string): Promise<string> {
+  const openedAt = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('bills')
+    .update({ whatsapp_opened_at: openedAt })
+    .eq('id', billId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('whatsapp-mark-failed')
+  return openedAt
+}
+
 export interface SettingsData {
   people: Person[]
   settings: RotationSettings | null

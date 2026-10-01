@@ -42,6 +42,23 @@ export async function openBillPdf(path: string): Promise<PdfResult> {
   }
 }
 
+export type PdfDownload = { ok: true; file: File } | { ok: false; reason: 'not-found' | 'network' }
+
+/**
+ * Baixa o PDF pela sessão (bucket privado, só membros) e monta um File em memória, pronto para
+ * navigator.share. O limite do bucket é 5 MB, então guardar o arquivo na memória é seguro.
+ */
+export async function downloadBillPdf(path: string, fileName: string): Promise<PdfDownload> {
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET).download(path)
+    if (error) return { ok: false, reason: isNetworkError(error) ? 'network' : 'not-found' }
+    if (!data || data.size === 0) return { ok: false, reason: 'not-found' }
+    return { ok: true, file: new File([data], fileName, { type: 'application/pdf' }) }
+  } catch {
+    return { ok: false, reason: 'network' }
+  }
+}
+
 /** Sobe o PDF para <bill_id>/<timestamp>.pdf. O nome novo nunca colide com o do PDF anterior. */
 export async function uploadBillPdf(billId: string, file: File): Promise<string> {
   const path = `${billId}/${Date.now()}.pdf`

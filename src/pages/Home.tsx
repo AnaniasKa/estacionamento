@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import BarcodeBlock from '../components/BarcodeBlock'
 import { AlertIcon, CheckIcon, ClockIcon, LogoutIcon } from '../components/icons'
+import ShareBlock from '../components/ShareBlock'
 import { ErrorCard, LoadingCard } from '../components/States'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { useSession } from '../hooks/useSession'
@@ -11,7 +12,7 @@ import { billStatus, previousMonthLine, statusText, type Bill } from '../lib/bil
 import { formatBRL, formatDayMonth, monthYearLabel } from '../lib/format'
 import { loadHome, markBillPaid, type HomeData } from '../lib/queries'
 import { getRotation, monthStart, previousMonth, resolvePayer } from '../lib/rotation'
-import type { Member } from '../lib/types'
+import type { Member, Person } from '../lib/types'
 
 export default function Home() {
   const { member } = useSession()
@@ -27,6 +28,13 @@ export default function Home() {
       bills: d.bills.map((b) =>
         b.id === billId ? { ...b, status: 'paid' as const, paid_at: paidAt, paid_by: memberId } : b,
       ),
+    }))
+  }
+
+  function onShared(billId: string, openedAt: string) {
+    update((d) => ({
+      ...d,
+      bills: d.bills.map((b) => (b.id === billId ? { ...b, whatsapp_opened_at: openedAt } : b)),
     }))
   }
 
@@ -49,6 +57,7 @@ export default function Home() {
           month={month}
           previous={previous}
           onPaid={onPaid}
+          onShared={onShared}
         />
       )}
     </main>
@@ -62,9 +71,10 @@ interface ContentProps {
   month: string
   previous: string
   onPaid: (billId: string, paidAt: string, memberId: string) => void
+  onShared: (billId: string, openedAt: string) => void
 }
 
-function HomeContent({ data, me, today, month, previous, onPaid }: ContentProps) {
+function HomeContent({ data, me, today, month, previous, onPaid, onShared }: ContentProps) {
   // Sem settings ou sem a segunda pessoa, não há rodízio: nada de rotation.ts.
   const rotation = getRotation(data.people, data.settings)
   if (!rotation) {
@@ -99,7 +109,14 @@ function HomeContent({ data, me, today, month, previous, onPaid }: ContentProps)
       </section>
 
       {bill ? (
-        <BillDetails bill={bill} today={today} memberId={me.id} onPaid={onPaid} />
+        <BillDetails
+          bill={bill}
+          today={today}
+          memberId={me.id}
+          recipient={data.people.find((p) => p.id === bill.payer_id)}
+          onPaid={onPaid}
+          onShared={onShared}
+        />
       ) : (
         <div className="card stack">
           <h2 className="section-title">Nenhum boleto lançado</h2>
@@ -117,12 +134,16 @@ function BillDetails({
   bill,
   today,
   memberId,
+  recipient,
   onPaid,
+  onShared,
 }: {
   bill: Bill
   today: string
   memberId: string
+  recipient: Person | undefined
   onPaid: (billId: string, paidAt: string, memberId: string) => void
+  onShared: (billId: string, openedAt: string) => void
 }) {
   const status = billStatus(bill, today)
   const StatusIcon = status === 'paid' ? CheckIcon : status === 'overdue' ? AlertIcon : ClockIcon
@@ -149,8 +170,10 @@ function BillDetails({
         <span>{statusText(bill, today)}</span>
       </div>
 
-      {/* Passo 6: o botão "Enviar no WhatsApp" (só para quem não é o pagador do mês) entra aqui. */}
-      <div className="share-slot" />
+      {/* Compartilhar no WhatsApp: só aparece para quem não é o pagador do boleto. */}
+      <div className="share-slot">
+        <ShareBlock bill={bill} recipient={recipient} onShared={onShared} />
+      </div>
 
       {status !== 'paid' && <MarkPaid bill={bill} memberId={memberId} onPaid={onPaid} />}
       <Link to={`/boleto?mes=${bill.month}`} className="btn">
