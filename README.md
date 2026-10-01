@@ -53,8 +53,9 @@ O mês de um boleto **não pode ser alterado** depois de lançado.
   tem `#/`), então não precisa de configuração de servidor.
 - **Backend:** **Supabase** — Postgres (tabelas `members`, `settings`, `bills`), Auth (e-mail e senha) e
   Storage (bucket privado `boletos`).
-- **Sem bibliotecas além de** `react`, `react-dom`, `react-router-dom` e `@supabase/supabase-js`. Sem analytics,
-  sem fontes externas, sem scripts de terceiros.
+- **Em produção, sem bibliotecas além de** `react`, `react-dom`, `react-router-dom` e `@supabase/supabase-js`.
+  Sem analytics, sem fontes externas, sem scripts de terceiros. (As ferramentas de desenvolvimento, como Vite,
+  Vitest e TypeScript, ficam de fora desta frase.)
 
 ### Por que o repositório pode ser público
 
@@ -65,7 +66,7 @@ a regra pode mudar, confira). Isso é seguro aqui porque:
 - A **URL do projeto e a chave pública (anon/publishable) vão para o navegador de qualquer jeito**; não são segredo.
 - A proteção real está no banco: **RLS** ligada em todas as tabelas e **grants por coluna**
   (`supabase/migrations/0002_rls.sql`). O papel `anon` não lê nem grava nenhuma tabela; só membros autenticados
-  (`is_member()`) acessam. Não há `DELETE` para ninguém, e `bills.month` não tem grant de `UPDATE`.
+  (`is_member()`) acessam. Não há `DELETE` para os usuários do app, e `bills.month` não tem grant de `UPDATE`.
 - O bucket `boletos` é **privado**: os PDFs só abrem por **URL assinada** (10 minutos) ou por download
   autenticado de um membro.
 
@@ -187,9 +188,23 @@ Aba **Actions > Deploy (GitHub Pages) > Run workflow**, ou qualquer push em `mai
   3. Apague a linha de `bills` no *Table Editor*.
 - **Trocar uma das duas pessoas:** o app tem sempre **exatamente dois** membros (o rodízio só existe com dois).
   Para outra pessoa assumir o lugar de uma e **manter o histórico**, mantenha o mesmo usuário e a mesma linha de
-  `members` (o `id` é o mesmo do usuário do Auth): troque o e-mail do usuário em *Authentication > Users*, atualize
-  `name`, `email` e `phone` da linha em `members` (SQL Editor) e redefina a senha. As chaves estrangeiras impedem
-  apagar um membro que tem boletos. Adicionar um terceiro membro **não é suportado**.
+  `members` (o `id` é o mesmo do usuário do Auth). Na ordem:
+  1. Troque o e-mail do usuário em *Authentication > Users*.
+  2. Atualize `name`, `email` e `phone` da linha em `members` (SQL Editor).
+  3. **Encerre as sessões abertas da pessoa que saiu**, antes de redefinir a senha. No SQL Editor:
+     ```sql
+     delete from auth.sessions where user_id = '<id-do-usuario>';
+     ```
+     Os refresh tokens vão junto, por cascata. O token de acesso já emitido pode continuar válido por cerca de
+     1 hora (até expirar; o prazo é configurável no Auth), mas, sem a sessão, ele não se renova.
+  4. Redefina a senha.
+
+  As chaves estrangeiras impedem apagar um membro que tem boletos. Adicionar um terceiro membro **não é
+  suportado**.
+
+  > **Atenção:** quem entra passa a ver **todo o histórico**, inclusive os **PDFs antigos**, que costumam ter
+  > nome, CPF e endereço de quem pagou. Se isso for um problema, apague os boletos e os PDFs antigos antes (veja
+  > "Apagar um boleto") ou exporte e guarde o que precisar fora do app.
 
 ---
 
