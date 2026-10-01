@@ -151,7 +151,9 @@ segurança** → publica `dist/`. As actions usadas são oficiais (`actions/*`) 
 
 Depois do build, o job **falha** se encontrar:
 
-- texto de chave de serviço ou secreta do Supabase no repositório;
+- texto de chave de serviço ou secreta do Supabase no repositório (o README fica fora dessa busca literal, porque
+  cita os nomes como aviso; nele e em todos os arquivos a guarda procura o **formato** de uma chave de verdade e
+  de um JWT);
 - no `dist/`, texto de chave de serviço, uma chave secreta com formato de chave de verdade, ou **qualquer JWT cujo
   papel não seja `anon`** (uma chave de serviço é um JWT cujo papel só aparece em base64);
 - um arquivo `.env` (exceto `.env.example`);

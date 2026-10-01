@@ -70,8 +70,15 @@ jobs:
         run: |
           # Os padrões são montados com aspas no meio para este arquivo não casar consigo mesmo.
           # 1) Repositório (fora de dist, node_modules e .git): nenhum texto de chave de serviço ou secreta.
-          if grep -rIl --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist -e "service"_"role" -e "sb"_"secret"_ . ; then
+          #    O README só cita esses nomes como aviso, então fica fora da busca literal; nele (e em tudo)
+          #    a busca abaixo procura o formato de uma chave de verdade: prefixo secreto + 16 ou mais
+          #    caracteres, ou um JWT.
+          if grep -rIl --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude=README.md -e "service"_"role" -e "sb"_"secret"_ . ; then
             echo "::error::Texto de chave secreta do Supabase no repositório (arquivos acima)."
+            exit 1
+          fi
+          if grep -rIlE --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist -e "sb"_"secret"_"[A-Za-z0-9_-]{16,}" -e "eyJ[A-Za-z0-9_-]{20,}\.eyJ" . ; then
+            echo "::error::Formato de chave ou JWT no repositório (arquivos acima)."
             exit 1
           fi
           # 2) dist/: o supabase-js tem o prefixo secreto no código (para recusá-lo no navegador), então a
