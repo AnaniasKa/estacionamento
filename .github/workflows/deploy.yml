@@ -1,0 +1,125 @@
+name: Deploy (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissões mínimas para publicar no Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Um deploy por vez; um deploy em andamento termina antes do próximo começar.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node (LTS fixa)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Conferir variáveis de build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          # Sem as variáveis o app compilaria e abriria só a tela de configuração ausente.
+          test -n "$VITE_SUPABASE_URL" || { echo "::error::Variável VITE_SUPABASE_URL não definida (Settings > Secrets and variables > Actions > Variables)"; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::Variável VITE_SUPABASE_ANON_KEY não definida"; exit 1; }
+          # A chave pública (anon) é um JWT com "role":"anon". Uma chave de serviço também é um JWT,
+          # mas o papel só aparece codificado em base64 dentro dela, então a guarda de texto abaixo não a
+          # pegaria: decodifica o JWT e confere o papel.
+          node -e '
+            const k = process.env.VITE_SUPABASE_ANON_KEY.trim();
+            if (k.startsWith("sb" + "_secret_")) { console.error("::error::A chave informada é secreta, não a pública."); process.exit(1); }
+            if (k.split(".").length === 3) {
+              let role = "";
+              try { role = JSON.parse(Buffer.from(k.split(".")[1], "base64url").toString()).role ?? ""; } catch {}
+              if (role && role !== "anon") { console.error("::error::A chave do JWT não é a anon (role=" + role + ")."); process.exit(1); }
+            }
+          '
+
+      - name: Verificar tipos
+        run: npx tsc -b
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Guarda de segurança (segredos e .env)
+        run: |
+          # Os padrões são montados com aspas no meio para este arquivo não casar consigo mesmo.
+          # 1) Repositório (fora de dist, node_modules e .git): nenhum texto de chave de serviço ou secreta.
+          if grep -rIl --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist -e "service"_"role" -e "sb"_"secret"_ . ; then
+            echo "::error::Texto de chave secreta do Supabase no repositório (arquivos acima)."
+            exit 1
+          fi
+          # 2) dist/: o supabase-js tem o prefixo secreto no código (para recusá-lo no navegador), então a
+          #    busca literal daria falso positivo. Procura o formato de uma chave de verdade (prefixo + 16 ou
+          #    mais caracteres) e o texto do papel de serviço.
+          if grep -rIlE -e "service"_"role" -e "sb"_"secret"_"[A-Za-z0-9_-]{16,}" dist ; then
+            echo "::error::Chave secreta do Supabase no dist (arquivos acima)."
+            exit 1
+          fi
+          # 3) dist/: todo JWT embutido precisa ter role=anon (uma chave de serviço é um JWT cujo papel só
+          #    aparece em base64, invisível à busca de texto).
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const bad = [];
+            (function walk(d) {
+              for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+                const p = path.join(d, e.name);
+                if (e.isDirectory()) { walk(p); continue; }
+                const text = fs.readFileSync(p, "utf8");
+                for (const m of text.matchAll(/eyJ[\w-]+\.(eyJ[\w-]+)\.[\w-]+/g)) {
+                  let role = "";
+                  try { role = JSON.parse(Buffer.from(m[1], "base64url").toString()).role ?? ""; } catch {}
+                  if (role !== "anon") bad.push(p + " (role=" + role + ")");
+                }
+              }
+            })("dist");
+            if (bad.length) { console.error("::error::JWT que não é anon no dist: " + bad.join(", ")); process.exit(1); }
+          '
+          # 4) Nenhum arquivo .env (exceto o modelo .env.example) pode estar no repositório ou em dist/.
+          found="$(find . -path ./node_modules -prune -o -path ./.git -prune -o -type f -name '.env*' ! -name '.env.example' -print)"
+          if [ -n "$found" ]; then
+            echo "::error::Arquivo .env encontrado:"
+            echo "$found"
+            exit 1
+          fi
+
+      - name: Enviar artefato do Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

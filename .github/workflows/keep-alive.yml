@@ -1,0 +1,46 @@
+name: Keep-alive (Supabase)
+
+# Gera atividade de banco duas vezes por semana para o projeto Free não ser pausado por inatividade.
+# Chama public.ping() (supabase/migrations/0004_ping.sql) com a chave pública.
+# Horário em UTC, num minuto "quebrado" e em dias diferentes do deploy (que roda a cada push em main).
+on:
+  schedule:
+    - cron: '17 9 * * 2,5' # terças e sextas, 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Não usa nenhuma action de terceiros (nem checkout): só curl, então não há SHA a fixar.
+      - name: Chamar ping()
+        env:
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "::error::Variável VITE_SUPABASE_URL não definida"; exit 1; }
+          test -n "$SUPABASE_KEY" || { echo "::error::Variável VITE_SUPABASE_ANON_KEY não definida"; exit 1; }
+          url="${SUPABASE_URL%/}/rest/v1/rpc/ping"
+
+          for attempt in 1 2 3 4; do
+            # A chave vai por stdin (-H @-): não aparece na linha de comando nem nos logs, e o curl
+            # não roda em modo verboso.
+            if body="$(printf 'apikey: %s\n' "$SUPABASE_KEY" | curl -fsS --max-time 20 \
+                  -X POST "$url" -H @- -H 'Content-Type: application/json' -d '{}')"; then
+              if [ "$(printf '%s' "$body" | tr -d '[:space:]')" = "true" ]; then
+                echo "ping() respondeu true (tentativa $attempt)."
+                exit 0
+              fi
+              echo "::warning::Resposta inesperada do ping() na tentativa $attempt (esperado: true)."
+            else
+              echo "::warning::Falha na requisição na tentativa $attempt."
+            fi
+            [ "$attempt" -lt 4 ] && sleep $((attempt * 20))
+          done
+
+          echo "::error::ping() não respondeu true após 4 tentativas. O projeto pode estar pausado ou a função ausente."
+          exit 1
